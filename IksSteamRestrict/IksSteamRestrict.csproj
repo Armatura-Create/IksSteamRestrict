@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="CounterStrikeSharp.Api" Version="1.0.301" />
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+        <Reference Include="../RequirmentsApi/IksAdminApi.dll" />
+    </ItemGroup>
+
+</Project>

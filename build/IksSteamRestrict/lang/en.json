@@ -1,0 +1,5 @@
+{
+  "KickMessage.ByHoursPlay": "{blue}[SR] {red}Insufficient playtime in game. {white}Required hours: {value}.",
+  "KickMessage.ByLevelSteam": "{blue}[SR] {red}Insufficient Steam level. {white}Required level: {value}.",
+  "KickMessage.ByAgeAccount": "{blue}[SR] {red}Insufficient account age. {white}Required age: {value}."
+}
