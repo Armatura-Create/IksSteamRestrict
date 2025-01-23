@@ -10,7 +10,6 @@ public class SteamUserInfo
     public int CS2Playtime { get; set; }
     public bool IsPrivate { get; set; }
     public bool IsGameDetailsPrivate { get; set; }
-    public bool HasPrime { get; set; }
     public bool IsTradeBanned { get; set; }
     public bool IsVACBanned { get; set; }
     public bool IsGameBanned { get; set; }
@@ -22,7 +21,7 @@ public class SteamService
     private readonly string _steamWebAPIKey;
     private readonly SRConfig _config;
     private readonly ILogger _logger;
-    public SteamUserInfo? UserInfo = null;
+    public SteamUserInfo UserInfo { get; }
 
     public SteamService(IksSteamRestrict plugin, SteamUserInfo userInfo)
     {
@@ -35,104 +34,113 @@ public class SteamService
 
     public async Task FetchSteamUserInfo(string steamId)
     {
-        //UserInfo.HasPrime = await FetchHasPrimeAsync(steamId);
-        UserInfo!.CS2Playtime = await FetchCS2PlaytimeAsync(steamId) / 60;
-        UserInfo.SteamLevel = await FetchSteamLevelAsync(steamId);
-        _logger.LogInformation("Start checking user restrictions");
-        _logger.LogInformation("Steam Api Key: " + _config.SteamWebAPI);
-        await FetchProfilePrivacyAsync(steamId, UserInfo);
-        await FetchTradeBanStatusAsync(steamId, UserInfo);
-        await FetchGameBanStatusAsync(steamId, UserInfo);
+        _logger.LogInformation("Start fetching Steam user info");
+        
+        var playtimeTask = FetchCs2PlaytimeAsync(steamId);
+        var steamLevel = FetchSteamLevelAsync(steamId);
+        var profileTask = FetchProfilePrivacyAsync(steamId);
+        var tradeBanTask = FetchTradeBanStatusAsync(steamId);
+        var gameBanTask = FetchGameBanStatusAsync(steamId);
+
+        await playtimeTask;
+        await steamLevel;
+        await profileTask;
+        await tradeBanTask;
+        await gameBanTask;
+
+        _logger.LogInformation("Steam user info fetched successfully");
     }
 
-    private async Task<int> FetchCS2PlaytimeAsync(string steamId)
+    private async Task FetchCs2PlaytimeAsync(string steamId)
     {
         var url = $"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key={_steamWebAPIKey}&steamid={steamId}&format=json";
-        _logger.LogInformation("CS2Playtime URL: " + url);
-        var json = await GetApiResponseAsync(url);
-        return json != null ? ParseCS2Playtime(json) : 0;
-    }
-
-    private async Task<int> FetchSteamLevelAsync(string steamId)
-    {
-        var url = $"https://api.steampowered.com/IPlayerService/GetSteamLevel/v1/?key={_steamWebAPIKey}&steamid={steamId}&format=json";
-        _logger.LogInformation("SteamLevel URL: " + url);
-        var json = await GetApiResponseAsync(url);
-        return json != null ? ParseSteamLevel(json) : 0;
-    }
-
-    private async Task FetchProfilePrivacyAsync(string steamId, SteamUserInfo userInfo)
-    {
-        var url = $"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={_steamWebAPIKey}&steamids={steamId}&format=json";
-        _logger.LogInformation("ProfilePrivacy URL: " + url);
-        var json = await GetApiResponseAsync(url);
-        if (json != null) ParseSteamUserInfo(json, userInfo);
-    }
-
-    private async Task FetchTradeBanStatusAsync(string steamId, SteamUserInfo userInfo)
-    {
-        var url = $"https://api.steampowered.com/ISteamUser/GetPlayerBans/v1/?key={_steamWebAPIKey}&steamids={steamId}&format=json";
-        _logger.LogInformation("TradeBanStatus URL: " + url);
-        var json = await GetApiResponseAsync(url);
-        if (json != null)
+        _logger.LogInformation($"Fetching CS2Playtime: {url}");
+        await FetchAndParseAsync(url, json =>
         {
-            ParseTradeBanStatus(json, userInfo);
-            ParseVACBanStatus(json, userInfo);
-        }
+            UserInfo.CS2Playtime = ParseCs2Playtime(json) / 60;
+        });
+    }
+    
+    private async Task FetchSteamLevelAsync(string steamId)
+    {
+        var url = $"https://api.steampowered.com/ISteamUser/GetSteamLevel/v1/?key={_steamWebAPIKey}&steamid={steamId}";
+        _logger.LogInformation($"Fetching SteamLevel: {url}");
+        await FetchAndParseAsync(url, json =>
+        {
+            UserInfo.SteamLevel = ParseSteamLevel(json);
+        });
+    }
+    
+    private async Task FetchProfilePrivacyAsync(string steamId)
+    {
+        var url = $"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={_steamWebAPIKey}&steamids={steamId}";
+        _logger.LogInformation($"Fetching Profile Privacy: {url}");
+        await FetchAndParseAsync(url, json => ParseSteamUserInfo(json, UserInfo));
     }
 
-    private async Task FetchGameBanStatusAsync(string steamId, SteamUserInfo userInfo)
+    private async Task FetchTradeBanStatusAsync(string steamId)
+    {
+        var url = $"https://api.steampowered.com/ISteamUser/GetPlayerBans/v1/?key={_steamWebAPIKey}&steamids={steamId}";
+        _logger.LogInformation($"Fetching Trade Ban Status: {url}");
+        await FetchAndParseAsync(url, json =>
+        {
+            ParseTradeBanStatus(json, UserInfo);
+            ParseVACBanStatus(json, UserInfo);
+        });
+    }
+
+    private async Task FetchGameBanStatusAsync(string steamId)
     {
         var url = $"https://api.steampowered.com/ISteamUser/GetUserGameBan/v1/?key={_steamWebAPIKey}&steamids={steamId}";
-        _logger.LogInformation("GameBanStatus URL: " + url);
-        var json = await GetApiResponseAsync(url);
-        if (json != null) ParseGameBanStatus(json, userInfo);
+        _logger.LogInformation($"Fetching Game Ban Status: {url}");
+        await FetchAndParseAsync(url, json => ParseGameBanStatus(json, UserInfo));
     }
 
-    private async Task<string?> GetApiResponseAsync(string url)
+    private async Task FetchAndParseAsync(string url, Action<string> parseAction)
     {
         try
         {
             var response = await _httpClient.GetAsync(url);
             if (response.IsSuccessStatusCode)
             {
-                return await response.Content.ReadAsStringAsync();
+                var json = await response.Content.ReadAsStringAsync();
+                parseAction(json);
+            }
+            else
+            {
+                _logger.LogError($"API error: {response.StatusCode} - {await response.Content.ReadAsStringAsync()}");
             }
         }
-        catch (Exception e)
+        catch (Exception ex)
         {
-            _logger.LogError($"An error occurred while fetching API response: {e.Message}");
+            _logger.LogError($"Error fetching or parsing data from {url}: {ex.Message}");
         }
-
-        return null;
     }
 
-    private int ParseCS2Playtime(string json)
+    private int ParseCs2Playtime(string json)
     {
         JObject data = JObject.Parse(json);
         JToken? game = data["response"]?["games"]?.FirstOrDefault(x => x["appid"]?.Value<int>() == 730);
-        return game?["playtime_forever"]?.Value<int>() ?? 0;
+        return game?["playtime_forever"]?.Value<int>() ?? -1;
     }
 
     private int ParseSteamLevel(string json)
     {
-        JObject data = JObject.Parse(json);
-        return (int)(data["response"]?["player_level"] ?? 0);
+        var data = JObject.Parse(json);
+        return (int)(data["response"]?["player_level"] ?? -1);
     }
 
     private void ParseSteamUserInfo(string json, SteamUserInfo userInfo)
     {
-        JObject data = JObject.Parse(json);
-        JToken? player = data["response"]?["players"]?.FirstOrDefault();
-        if (player != null)
-        {
-            userInfo.IsPrivate = player["communityvisibilitystate"]?.ToObject<int?>() != 3;
-            userInfo.IsGameDetailsPrivate = player["gameextrainfo"] == null;
-            int? timeCreated = player["timecreated"]?.ToObject<int?>();
-            userInfo.SteamAccountAge = timeCreated.HasValue
-                ? new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(timeCreated.Value)
-                : DateTime.Now;
-        }
+        var data = JObject.Parse(json);
+        var player = data["response"]?["players"]?.FirstOrDefault();
+        if (player == null) return;
+        userInfo.IsPrivate = player["communityvisibilitystate"]?.ToObject<int?>() != 3;
+        userInfo.IsGameDetailsPrivate = player["gameextrainfo"] == null;
+        var timeCreated = player["timecreated"]?.ToObject<int?>();
+        userInfo.SteamAccountAge = timeCreated.HasValue
+            ? new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(timeCreated.Value)
+            : DateTime.Now;
     }
 
     private void ParseTradeBanStatus(string json, SteamUserInfo userInfo)
@@ -155,26 +163,4 @@ public class SteamService
         var userGameBan = data["players"]?.FirstOrDefault();
         userInfo.IsVACBanned = userGameBan != null && (bool)(userGameBan["VACBanned"] ?? false);
     }
-
-    /*
-    ! This method is not used in the current implementation due to the people who bought Prime after
-    ! the CS2 release are not visible as Prime users. This method is kept here for reference if its gonna
-    ! be used in the future, whenever Volvo decides to fix their API.
-
-    private async Task<bool> FetchHasPrimeAsync(string steamId)
-    {
-        var url = $"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key={_steamWebAPIKey}&steamid={steamId}&include_appinfo=false&include_played_free_games=true&format=json";
-        var json = await GetApiResponseAsync(url);
-        if (json != null)
-        {
-            JObject data = JObject.Parse(json);
-            var games = data["response"]?["games"];
-            if (games != null)
-            {
-                _logger.LogInformation($"Prime: {games.Any(game => game["appid"]?.Value<int>() == 624820 || game["appid"]?.Value<int>() == 54029)}");
-                return games.Any(game => game["appid"]?.Value<int>() == 624820 || game["appid"]?.Value<int>() == 54029);
-            }
-        }
-        return false;
-    }*/
 }

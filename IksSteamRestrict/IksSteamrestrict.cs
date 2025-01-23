@@ -43,8 +43,8 @@ public class IksSteamRestrict : AdminModule
         _bypassConfig = bypassConfigService.LoadConfig();
 
         RegisterListener<Listeners.OnGameServerSteamAPIActivated>(() => { _gBSteamApiActivated = true; });
-        RegisterListener<Listeners.OnClientConnect>((int slot, string name, string ipAddress) => { _gHTimer[slot]?.Kill(); });
-        RegisterListener<Listeners.OnClientDisconnect>((int slot) => { _gHTimer[slot]?.Kill(); });
+        RegisterListener<Listeners.OnClientConnect>((slot, _, _) => { _gHTimer[slot]?.Kill(); });
+        RegisterListener<Listeners.OnClientDisconnect>(slot => { _gHTimer[slot]?.Kill(); });
         RegisterEventHandler<EventPlayerConnectFull>(OnPlayerConnectFull, HookMode.Post);
 
         Config = Api.Config.ReadOrCreate(AdminUtils.CoreInstance.ModuleDirectory + "/configs/module_steam_restrict.json", new SRConfig());
@@ -73,11 +73,9 @@ public class IksSteamRestrict : AdminModule
         {
             _gHTimer[player.Slot] = AddTimer(1.0f, () =>
             {
-                if (player.AuthorizedSteamID != null)
-                {
-                    _gHTimer[player.Slot]?.Kill();
-                    OnPlayerConnectFull(player);
-                }
+                if (player.AuthorizedSteamID == null) return;
+                _gHTimer[player.Slot]?.Kill();
+                OnPlayerConnectFull(player);
             }, TimerFlags.REPEAT);
             return;
         }
@@ -86,16 +84,10 @@ public class IksSteamRestrict : AdminModule
             return;
 
         var authorizedSteamID = player.AuthorizedSteamID.SteamId64;
-        var handle = player.Handle;
-
-        Task.Run(() =>
-        {
-            Server.NextWorldUpdate(() => { CheckUserViolations(handle, authorizedSteamID); });
-            return Task.CompletedTask;
-        });
+        Task.Run(async () => { Server.NextWorldUpdate(() => { CheckUserViolations(authorizedSteamID); }); });
     }
 
-    private void CheckUserViolations(nint handle, ulong authorizedSteamID)
+    private void CheckUserViolations(ulong authorizedSteamID)
     {
         var userInfo = new SteamUserInfo();
 
@@ -105,13 +97,13 @@ public class IksSteamRestrict : AdminModule
         {
             await steamService.FetchSteamUserInfo(authorizedSteamID.ToString());
 
-            var userInfo = steamService.UserInfo;
+            userInfo = steamService.UserInfo;
 
             await Server.NextWorldUpdateAsync(() =>
             {
                 var player = Utilities.GetPlayerFromSteamId(authorizedSteamID);
 
-                if (player?.IsValid != true || userInfo == null) return;
+                if (player?.IsValid != true) return;
                 if (Config.Debug)
                 {
                     Logger.LogInformation($"{player.PlayerName} info:");
@@ -185,13 +177,15 @@ public class IksSteamRestrict : AdminModule
         }
 
         //TODO Добавить команду для rcon что бы можо было добавлять через консоль или через админку
-        BypassConfig bypassConfig = _bypassConfig ?? new BypassConfig();
-        PlayerBypassConfig? playerBypassConfig = bypassConfig.GetPlayerConfig(steamId64);
+        var bypassConfig = _bypassConfig ?? new BypassConfig();
+        var playerBypassConfig = bypassConfig.GetPlayerConfig(steamId64);
 
-        if (!(playerBypassConfig?.BypassMinimumHours ?? false) && Config.MinimumHour != -1 && userInfo.CS2Playtime < Config.MinimumHour)
+        if (!(playerBypassConfig?.BypassMinimumHours ?? false) && Config.MinimumHour != -1 && userInfo.CS2Playtime > -1 &&
+            userInfo.CS2Playtime < Config.MinimumHour)
             return TypeViolated.MIN_HOURS;
 
-        if (!(playerBypassConfig?.BypassMinimumLevel ?? false) && Config.MinimumLevel != -1 && userInfo.SteamLevel < Config.MinimumLevel)
+        if (!(playerBypassConfig?.BypassMinimumLevel ?? false) && Config.MinimumLevel != -1 && userInfo.SteamLevel > -1 &&
+            userInfo.SteamLevel < Config.MinimumLevel)
             return TypeViolated.STEAM_LEVEL;
 
         if (!(playerBypassConfig?.BypassMinimumSteamAccountAge ?? false) && Config.MinimumSteamAccountAgeInDays != -1 &&
