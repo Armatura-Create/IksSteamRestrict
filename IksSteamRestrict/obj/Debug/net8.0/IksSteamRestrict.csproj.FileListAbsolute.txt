@@ -12,3 +12,4 @@
 /Users/alexandrdanilyev/Documents/Work/CS/plugins/IksSteamRestrict/IksSteamRestrict/obj/Debug/net8.0/refint/IksSteamRestrict.dll
 /Users/alexandrdanilyev/Documents/Work/CS/plugins/IksSteamRestrict/IksSteamRestrict/obj/Debug/net8.0/IksSteamRestrict.pdb
 /Users/alexandrdanilyev/Documents/Work/CS/plugins/IksSteamRestrict/IksSteamRestrict/obj/Debug/net8.0/ref/IksSteamRestrict.dll
+/Users/alexandrdanilyev/Documents/Work/CS/plugins/IksSteamRestrict/IksSteamRestrict/obj/Debug/net8.0/IksSteamRestrict.sourcelink.json

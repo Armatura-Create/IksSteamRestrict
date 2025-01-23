@@ -2,33 +2,35 @@
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes;
 using CounterStrikeSharp.API.Modules.Timers;
-using CounterStrikeSharp.API.Modules.Utils;
 using IksAdminApi;
 using Microsoft.Extensions.Logging;
+using static System.DateTime;
+using Timer = CounterStrikeSharp.API.Modules.Timers.Timer;
 
 namespace IksSteamRestrict;
 
 [MinimumApiVersion(300)]
 public class IksSteamRestrict : AdminModule
 {
-    public override string ModuleName => "SteamRestrict";
+    public override string ModuleName => "IksSteamRestrict";
     public override string ModuleVersion => "1.0.0";
     public override string ModuleAuthor => "Armatura";
 
     private BypassConfig? _bypassConfig;
     public SRConfig Config { get; set; } = new();
-    public readonly HttpClient Client = new HttpClient();
-    
-    private bool g_bSteamAPIActivated = false;
-    private CounterStrikeSharp.API.Modules.Timers.Timer?[] g_hTimer = new CounterStrikeSharp.API.Modules.Timers.Timer?[65];
-    private int[] g_iWarnTime = new int[65];
+    public required HttpClient Client;
+
+    private bool _gBSteamApiActivated;
+    private readonly Timer?[] _gHTimer = new Timer?[65];
+    private readonly int[] _gIWarnTime = new int[65];
 
     public override void Load(bool hotReload)
     {
         if (!hotReload) return;
-        g_bSteamAPIActivated = true;
+        _gBSteamApiActivated = true;
 
-        foreach (var player in Utilities.GetPlayers().Where(m => m is { Connected: PlayerConnectedState.PlayerConnected, IsHLTV: false, IsBot: false } && m.SteamID.ToString().Length == 17))
+        foreach (var player in Utilities.GetPlayers().Where(m =>
+                     m is { Connected: PlayerConnectedState.PlayerConnected, IsHLTV: false, IsBot: false } && m.SteamID.ToString().Length == 17))
         {
             OnPlayerConnectFull(player);
         }
@@ -39,24 +41,26 @@ public class IksSteamRestrict : AdminModule
         string bypassConfigFilePath = "bypass_config.json";
         var bypassConfigService = new BypassConfigService(Path.Combine(ModuleDirectory, bypassConfigFilePath));
         _bypassConfig = bypassConfigService.LoadConfig();
-        Config = Api.Config.ReadOrCreate("configs/steam_restrict", new SRConfig());
-        
-        RegisterListener<Listeners.OnGameServerSteamAPIActivated>(() => { g_bSteamAPIActivated = true; });
-        RegisterListener<Listeners.OnClientConnect>((int slot, string name, string ipAddress) => { g_hTimer[slot]?.Kill(); });
-        RegisterListener<Listeners.OnClientDisconnect>((int slot) => { g_hTimer[slot]?.Kill(); });
+
+        RegisterListener<Listeners.OnGameServerSteamAPIActivated>(() => { _gBSteamApiActivated = true; });
+        RegisterListener<Listeners.OnClientConnect>((int slot, string name, string ipAddress) => { _gHTimer[slot]?.Kill(); });
+        RegisterListener<Listeners.OnClientDisconnect>((int slot) => { _gHTimer[slot]?.Kill(); });
         RegisterEventHandler<EventPlayerConnectFull>(OnPlayerConnectFull, HookMode.Post);
+
+        Config = Api.Config.ReadOrCreate(AdminUtils.CoreInstance.ModuleDirectory + "/configs/module_steam_restrict.json", new SRConfig());
+        Client = new HttpClient();
     }
-    
-    public HookResult OnPlayerConnectFull(EventPlayerConnectFull @event, GameEventInfo info)
+
+    private HookResult OnPlayerConnectFull(EventPlayerConnectFull @event, GameEventInfo info)
     {
-        CCSPlayerController? player = @event.Userid;
+        var player = @event.Userid;
         if (player == null)
             return HookResult.Continue;
 
         OnPlayerConnectFull(player);
         return HookResult.Continue;
     }
-    
+
     private void OnPlayerConnectFull(CCSPlayerController player)
     {
         if (string.IsNullOrEmpty(Config.SteamWebAPI))
@@ -67,111 +71,110 @@ public class IksSteamRestrict : AdminModule
 
         if (player.AuthorizedSteamID == null)
         {
-            g_hTimer[player.Slot] = AddTimer(1.0f, () =>
+            _gHTimer[player.Slot] = AddTimer(1.0f, () =>
             {
                 if (player.AuthorizedSteamID != null)
                 {
-                    g_hTimer[player.Slot]?.Kill();
+                    _gHTimer[player.Slot]?.Kill();
                     OnPlayerConnectFull(player);
                 }
             }, TimerFlags.REPEAT);
             return;
         }
 
-        if (!g_bSteamAPIActivated)
+        if (!_gBSteamApiActivated)
             return;
 
-        ulong authorizedSteamID = player.AuthorizedSteamID.SteamId64;
-        nint handle = player.Handle;
+        var authorizedSteamID = player.AuthorizedSteamID.SteamId64;
+        var handle = player.Handle;
 
-        Task.Run(async () =>
+        Task.Run(() =>
         {
-            Server.NextWorldUpdate(() =>
-            {
-                CheckUserViolations(handle, authorizedSteamID);
-            });
+            Server.NextWorldUpdate(() => { CheckUserViolations(handle, authorizedSteamID); });
+            return Task.CompletedTask;
         });
     }
-    
+
     private void CheckUserViolations(nint handle, ulong authorizedSteamID)
     {
-        SteamUserInfo userInfo = new SteamUserInfo();
+        var userInfo = new SteamUserInfo();
 
-        SteamService steamService = new SteamService(this, userInfo);
+        var steamService = new SteamService(this, userInfo);
 
         Task.Run(async () =>
         {
             await steamService.FetchSteamUserInfo(authorizedSteamID.ToString());
 
-            SteamUserInfo? userInfo = steamService.UserInfo;
+            var userInfo = steamService.UserInfo;
 
-            Server.NextWorldUpdate(() =>
+            await Server.NextWorldUpdateAsync(() =>
             {
-                CCSPlayerController? player = Utilities.GetPlayerFromSteamId(authorizedSteamID);
+                var player = Utilities.GetPlayerFromSteamId(authorizedSteamID);
 
-                if (player?.IsValid == true && userInfo != null)
+                if (player?.IsValid != true || userInfo == null) return;
+                if (Config.Debug)
                 {
-                    if (Config.Debug)
+                    Logger.LogInformation($"{player.PlayerName} info:");
+                    Logger.LogInformation($"CS2Playtime: {userInfo.CS2Playtime}");
+                    Logger.LogInformation($"SteamLevel: {userInfo.SteamLevel}");
+                    Logger.LogInformation(
+                        (Now - userInfo.SteamAccountAge).TotalSeconds > 30
+                            ? $"Steam Account Creation Date: {userInfo.SteamAccountAge:dd-MM-yyyy} ({(int)(Now - userInfo.SteamAccountAge).TotalDays} days ago)"
+                            : $"Steam Account Creation Date: N/A");
+                    //Logger.LogInformation($"HasPrime: {userInfo.HasPrime}"); Removed due to people bought prime after CS2 cannot be detected sadly (or atleast not yet)
+                    Logger.LogInformation($"HasPrivateProfile: {userInfo.IsPrivate}");
+                    Logger.LogInformation($"HasPrivateGameDetails: {userInfo.IsGameDetailsPrivate}");
+                    Logger.LogInformation($"IsTradeBanned: {userInfo.IsTradeBanned}");
+                    Logger.LogInformation($"IsGameBanned: {userInfo.IsGameBanned}");
+                }
+
+                var result = IsRestrictionViolated(player, userInfo);
+
+                if (result == TypeViolated.APPROVED) return;
+                if (Config.BanRestrict)
+                {
+                    var playerSlot = player.Slot;
+                    _gIWarnTime[playerSlot] = Config.WarningTime;
+
+                    _gHTimer[playerSlot] = AddTimer(1.0f, () =>
                     {
-                        Logger.LogInformation($"{player.PlayerName} info:");
-                        Logger.LogInformation($"CS2Playtime: {userInfo.CS2Playtime}");
-                        Logger.LogInformation($"SteamLevel: {userInfo.SteamLevel}");
-                        if ((DateTime.Now - userInfo.SteamAccountAge).TotalSeconds > 30)
-                            Logger.LogInformation($"Steam Account Creation Date: {userInfo.SteamAccountAge:dd-MM-yyyy} ({(int)(DateTime.Now - userInfo.SteamAccountAge).TotalDays} days ago)");
-                        else
-                            Logger.LogInformation($"Steam Account Creation Date: N/A");
-                        //Logger.LogInformation($"HasPrime: {userInfo.HasPrime}"); Removed due to people bought prime after CS2 cannot be detected sadly (or atleast not yet)
-                        Logger.LogInformation($"HasPrivateProfile: {userInfo.IsPrivate}");
-                        Logger.LogInformation($"HasPrivateGameDetails: {userInfo.IsGameDetailsPrivate}");
-                        Logger.LogInformation($"IsTradeBanned: {userInfo.IsTradeBanned}");
-                        Logger.LogInformation($"IsGameBanned: {userInfo.IsGameBanned}");
-                    }
+                        if (player?.IsValid == true)
+                        {
+                            _gIWarnTime[playerSlot]--;
 
-                    var result = IsRestrictionViolated(player, userInfo);
-
-                    if (result != TypeViolated.APPROVED)
-                    {
-                        
-                            int playerSlot = player.Slot;
-                            g_iWarnTime[playerSlot] = Config.PrivateProfileWarningTime;
-                            int printInterval = Config.PrivateProfileWarningPrintSeconds;
-                            int remainingPrintTime = printInterval;
-
-                            g_hTimer[playerSlot] = AddTimer(1.0f, () =>
+                            if (_gIWarnTime[playerSlot] > 0)
                             {
-                                if (player?.IsValid == true)
-                                {
-                                    g_iWarnTime[playerSlot]--;
-                                    remainingPrintTime--;
+                                Server.NextFrame(() => { player.Print(GetReasonPrivate(result)); });
+                            }
 
-                                    if (remainingPrintTime <= 0)
-                                    {
-                                        Server.NextFrame(() => {
-                                            player.Print(Api.Localizer["Tag." + result.ToString(), ],$" {ChatColors.Silver}[ {ChatColors.Lime}SteamRestrict {ChatColors.Silver}] {ChatColors.LightRed}Your Steam profile or Game details are private. You will be kicked in {g_iWarnTime[playerSlot]} seconds.");
-                                        });
-                                        remainingPrintTime = printInterval;
-                                    }
+                            if (_gIWarnTime[playerSlot] > 0) return;
+                            var playerBan = new PlayerBan(
+                                player.SteamID.ToString(),
+                                player.IpAddress,
+                                player.PlayerName,
+                                GetReason(result),
+                                GetDuration(result, userInfo)
+                            );
+                            Api.AddBan(playerBan, false);
 
-                                    if (g_iWarnTime[playerSlot] <= 0)
-                                    {
-                                        PlayerBan playerBan = new PlayerBan();
-                                        Api.AddBan(playerBan, false);
-                                        g_hTimer[playerSlot]?.Kill();
-                                        g_hTimer[playerSlot] = null;
-                                    }
-                                }
-                                else
-                                {
-                                    g_hTimer[playerSlot]?.Kill();
-                                    g_hTimer[playerSlot] = null;
-                                }
-                            }, TimerFlags.REPEAT);
-                    }
+                            _gHTimer[playerSlot]?.Kill();
+                            _gHTimer[playerSlot] = null;
+                        }
+                        else
+                        {
+                            _gHTimer[playerSlot]?.Kill();
+                            _gHTimer[playerSlot] = null;
+                        }
+                    }, TimerFlags.REPEAT);
+                }
+                else
+                {
+                    Api.Kick(Api.ConsoleAdmin, player, GetReasonPrivate(result));
                 }
             });
         });
     }
-    
+
     private TypeViolated IsRestrictionViolated(CCSPlayerController player, SteamUserInfo userInfo)
     {
         var steamId64 = player.AuthorizedSteamID?.SteamId64 ?? 0;
@@ -191,7 +194,8 @@ public class IksSteamRestrict : AdminModule
         if (!(playerBypassConfig?.BypassMinimumLevel ?? false) && Config.MinimumLevel != -1 && userInfo.SteamLevel < Config.MinimumLevel)
             return TypeViolated.STEAM_LEVEL;
 
-        if (!(playerBypassConfig?.BypassMinimumSteamAccountAge ?? false) && Config.MinimumSteamAccountAgeInDays != -1 && (DateTime.Now - userInfo.SteamAccountAge).TotalDays < Config.MinimumSteamAccountAgeInDays)
+        if (!(playerBypassConfig?.BypassMinimumSteamAccountAge ?? false) && Config.MinimumSteamAccountAgeInDays != -1 &&
+            (Now - userInfo.SteamAccountAge).TotalDays < Config.MinimumSteamAccountAgeInDays)
             return TypeViolated.MIN_ACCOUNT_AGE;
 
         if (Config.BlockPrivateProfile && !(playerBypassConfig?.BypassPrivateProfile ?? false) && (userInfo.IsPrivate || userInfo.IsGameDetailsPrivate))
@@ -219,5 +223,36 @@ public class IksSteamRestrict : AdminModule
         TRADE_BANNED,
         GAME_BANNED,
         VAC_BANNED,
+    }
+
+    private string GetReason(TypeViolated type)
+    {
+        return type + " [SR]";
+    }
+
+    private string GetReasonPrivate(TypeViolated type)
+    {
+        var value = type switch
+        {
+            TypeViolated.STEAM_LEVEL => Config.MinimumLevel,
+            TypeViolated.MIN_HOURS => Config.MinimumHour,
+            TypeViolated.MIN_ACCOUNT_AGE => Config.MinimumSteamAccountAgeInDays,
+            _ => 0
+        };
+        return Localizer["Reason." + type, value];
+    }
+
+    private int GetDuration(TypeViolated type, SteamUserInfo userinfo)
+    {
+        var result = type switch
+        {
+            TypeViolated.STEAM_LEVEL => Config.DaysBanByLevel * 24 * 60 * 60,
+            TypeViolated.MIN_HOURS => (Config.MinimumHour - userinfo.CS2Playtime) * 60 * 60,
+            TypeViolated.MIN_ACCOUNT_AGE => (Config.MinimumSteamAccountAgeInDays - (int)(Now - userinfo.SteamAccountAge).TotalDays) * 24 * 60 * 60,
+            TypeViolated.PRIVATE_PROFILE => 60,
+            _ => 0
+        };
+
+        return result;
     }
 }

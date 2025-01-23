@@ -1,0 +1,9 @@
+{
+  "Reason.MIN_HOURS": "{blue}[SR] {red}Недостаточное наигранное время. {white}Необходимо часов: {value}.",
+  "Reason.STEAM_LEVEL": "{blue}[SR] {red}Недостаточный уровень Steam. {white}Необходимый уровень: {value}.",
+  "Reason.MIN_ACCOUNT_AGE": "{blue}[SR] {red}Недостаточный возраст аккаунта. {white}Требуемый возраст: {value}.",
+  "Reason.PRIVATE_PROFILE": "{blue}[SR] {red}У вас скрытый профиль.",
+  "Reason.VAC_BANNED": "{blue}[SR] {red}У вас есть VAC-бан.",
+  "Reason.GAME_BANNED": "{blue}[SR] {red}У вас есть Игровая блокировка.",
+  "Reason.TRADE_BANNED": "{blue}[SR] {red}У вас есть запрет на торговлю."
+}

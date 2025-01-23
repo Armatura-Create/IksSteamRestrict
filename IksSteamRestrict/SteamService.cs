@@ -38,6 +38,8 @@ public class SteamService
         //UserInfo.HasPrime = await FetchHasPrimeAsync(steamId);
         UserInfo!.CS2Playtime = await FetchCS2PlaytimeAsync(steamId) / 60;
         UserInfo.SteamLevel = await FetchSteamLevelAsync(steamId);
+        _logger.LogInformation("Start checking user restrictions");
+        _logger.LogInformation("Steam Api Key: " + _config.SteamWebAPI);
         await FetchProfilePrivacyAsync(steamId, UserInfo);
         await FetchTradeBanStatusAsync(steamId, UserInfo);
         await FetchGameBanStatusAsync(steamId, UserInfo);
@@ -46,27 +48,31 @@ public class SteamService
     private async Task<int> FetchCS2PlaytimeAsync(string steamId)
     {
         var url = $"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key={_steamWebAPIKey}&steamid={steamId}&format=json";
+        _logger.LogInformation("CS2Playtime URL: " + url);
         var json = await GetApiResponseAsync(url);
         return json != null ? ParseCS2Playtime(json) : 0;
     }
 
     private async Task<int> FetchSteamLevelAsync(string steamId)
     {
-        var url = $"http://api.steampowered.com/IPlayerService/GetSteamLevel/v1/?key={_steamWebAPIKey}&steamid={steamId}";
+        var url = $"https://api.steampowered.com/IPlayerService/GetSteamLevel/v1/?key={_steamWebAPIKey}&steamid={steamId}&format=json";
+        _logger.LogInformation("SteamLevel URL: " + url);
         var json = await GetApiResponseAsync(url);
         return json != null ? ParseSteamLevel(json) : 0;
     }
 
     private async Task FetchProfilePrivacyAsync(string steamId, SteamUserInfo userInfo)
     {
-        var url = $"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={_steamWebAPIKey}&steamids={steamId}";
+        var url = $"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={_steamWebAPIKey}&steamids={steamId}&format=json";
+        _logger.LogInformation("ProfilePrivacy URL: " + url);
         var json = await GetApiResponseAsync(url);
         if (json != null) ParseSteamUserInfo(json, userInfo);
     }
 
     private async Task FetchTradeBanStatusAsync(string steamId, SteamUserInfo userInfo)
     {
-        var url = $"https://api.steampowered.com/ISteamUser/GetPlayerBans/v1/?key={_steamWebAPIKey}&steamids={steamId}";
+        var url = $"https://api.steampowered.com/ISteamUser/GetPlayerBans/v1/?key={_steamWebAPIKey}&steamids={steamId}&format=json";
+        _logger.LogInformation("TradeBanStatus URL: " + url);
         var json = await GetApiResponseAsync(url);
         if (json != null)
         {
@@ -78,6 +84,7 @@ public class SteamService
     private async Task FetchGameBanStatusAsync(string steamId, SteamUserInfo userInfo)
     {
         var url = $"https://api.steampowered.com/ISteamUser/GetUserGameBan/v1/?key={_steamWebAPIKey}&steamids={steamId}";
+        _logger.LogInformation("GameBanStatus URL: " + url);
         var json = await GetApiResponseAsync(url);
         if (json != null) ParseGameBanStatus(json, userInfo);
     }
@@ -130,22 +137,22 @@ public class SteamService
 
     private void ParseTradeBanStatus(string json, SteamUserInfo userInfo)
     {
-        JObject data = JObject.Parse(json);
-        JToken? playerBan = data["players"]?.FirstOrDefault();
+        var data = JObject.Parse(json);
+        var playerBan = data["players"]?.FirstOrDefault();
         userInfo.IsTradeBanned = playerBan != null && (bool)(playerBan["CommunityBanned"] ?? false);
     }
 
     private void ParseGameBanStatus(string json, SteamUserInfo userInfo)
     {
-        JObject data = JObject.Parse(json);
-        JToken? userGameBan = data["players"]?.FirstOrDefault();
+        var data = JObject.Parse(json);
+        var userGameBan = data["players"]?.FirstOrDefault();
         userInfo.IsGameBanned = userGameBan != null && (bool)(userGameBan["IsGameBanned"] ?? false);
     }
 
     private void ParseVACBanStatus(string json, SteamUserInfo userInfo)
     {
-        JObject data = JObject.Parse(json);
-        JToken? userGameBan = data["players"]?.FirstOrDefault();
+        var data = JObject.Parse(json);
+        var userGameBan = data["players"]?.FirstOrDefault();
         userInfo.IsVACBanned = userGameBan != null && (bool)(userGameBan["VACBanned"] ?? false);
     }
 

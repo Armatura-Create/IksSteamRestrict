@@ -3,7 +3,7 @@ using IksAdminApi;
 
 namespace IksSteamRestrict;
 
-public class SRConfig : PluginCFG<BansConfig>, IPluginCFG
+public class SRConfig : PluginCFG<SRConfig>, IPluginCFG
 {
     [JsonPropertyName("Debug")]
     public bool Debug { get; set; } = true;
@@ -15,9 +15,12 @@ public class SRConfig : PluginCFG<BansConfig>, IPluginCFG
     [JsonPropertyName("MinimumHour")]
     public int MinimumHour { get; set; } = -1;
 
-
+    
     [JsonPropertyName("MinimumLevel")]
     public int MinimumLevel { get; set; } = -1;
+    
+    [JsonPropertyName("DaysBanByLevel")]
+    public int DaysBanByLevel { get; set; } = -1;
 
 
     [JsonPropertyName("MinimumSteamAccountAgeInDays")]
@@ -35,4 +38,12 @@ public class SRConfig : PluginCFG<BansConfig>, IPluginCFG
 
     [JsonPropertyName("BlockGameBanned")]
     public bool BlockGameBanned { get; set; } = false;
+    
+    [JsonPropertyName("BanRestrict")]
+    public bool BanRestrict { get; set; } = false;
+    
+    [JsonPropertyName("WarningTime")]
+    public int WarningTime { get; set; } = 5;
+    
+    
 }
