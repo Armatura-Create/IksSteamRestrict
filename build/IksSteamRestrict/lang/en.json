@@ -1,9 +1,9 @@
 {
-  "Reason.MIN_HOURS": "{blue}[SR] {red}Insufficient playtime in game. {white}Required hours: {value}.",
-  "Reason.STEAM_LEVEL": "{blue}[SR] {red}Insufficient Steam level. {white}Required level: {value}.",
-  "Reason.MIN_ACCOUNT_AGE": "{blue}[SR] {red}Insufficient account age. {white}Required age: {value}.",
-  "Reason.PRIVATE_PROFILE": "{blue}[SR] {red}You have a hidden profile.",
-  "Reason.VAC_BANNED": "{blue}[SR] {red}You have VAC banned.",
-  "Reason.GAME_BANNED": "{blue}[SR] {red}You have Game banned.",
-  "Reason.TRADE_BANNED": "{blue}[SR] {red}You have Trade banned."
+  "Reason.MIN_HOURS": "{blue}[SR] {red}Insufficient playtime in game. {white}Required hours: {0}.",
+  "Reason.STEAM_LEVEL": "{blue}[SR] {red}Insufficient Steam level. {white}Required level: {0}.",
+  "Reason.MIN_ACCOUNT_AGE": "{blue}[SR] {red}Insufficient account age. {white}Required age: {0}.",
+  "Reason.PRIVATE_PROFILE": "{blue}[SR] {red}You have a hidden profile.{0}",
+  "Reason.VAC_BANNED": "{blue}[SR] {red}You have VAC banned.{0}",
+  "Reason.GAME_BANNED": "{blue}[SR] {red}You have Game banned.{0}",
+  "Reason.TRADE_BANNED": "{blue}[SR] {red}You have Trade banned.{0}"
 }

@@ -43,13 +43,23 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "dependencies": {
-            "CounterStrikeSharp.Api": {
+            "CounterStrikeSharp.API": {
+              "include": "Compile, Build, Native, ContentFiles, Analyzers, BuildTransitive",
+              "suppressParent": "None",
               "target": "Package",
-              "version": "[1.0.301, )"
+              "version": "[*, )"
+            },
+            "Dapper": {
+              "target": "Package",
+              "version": "[*, )"
+            },
+            "MySqlConnector": {
+              "target": "Package",
+              "version": "[*, )"
             },
             "Newtonsoft.Json": {
               "target": "Package",
-              "version": "[13.0.3, )"
+              "version": "[*, )"
             }
           },
           "imports": [

@@ -34,54 +34,70 @@ public class SteamService
 
     public async Task FetchSteamUserInfo(string steamId)
     {
-        _logger.LogInformation("Start fetching Steam user info");
-        
+        if (_config.Debug)
+        {
+            _logger.LogInformation("Start fetching Steam user info");
+        }
+
         var playtimeTask = FetchCs2PlaytimeAsync(steamId);
         var steamLevel = FetchSteamLevelAsync(steamId);
         var profileTask = FetchProfilePrivacyAsync(steamId);
         var tradeBanTask = FetchTradeBanStatusAsync(steamId);
-        var gameBanTask = FetchGameBanStatusAsync(steamId);
+        // var gameBanTask = FetchGameBanStatusAsync(steamId);
 
         await playtimeTask;
         await steamLevel;
         await profileTask;
         await tradeBanTask;
-        await gameBanTask;
+        // await gameBanTask;
 
-        _logger.LogInformation("Steam user info fetched successfully");
+        if (_config.Debug)
+        {
+            _logger.LogInformation("Steam user info fetched successfully");
+        }
     }
 
     private async Task FetchCs2PlaytimeAsync(string steamId)
     {
         var url = $"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key={_steamWebAPIKey}&steamid={steamId}&format=json";
-        _logger.LogInformation($"Fetching CS2Playtime: {url}");
-        await FetchAndParseAsync(url, json =>
+        if (_config.Debug)
         {
-            UserInfo.CS2Playtime = ParseCs2Playtime(json) / 60;
-        });
+            _logger.LogInformation($"Fetching CS2Playtime: {url}");
+        }
+
+        await FetchAndParseAsync(url, json => { UserInfo.CS2Playtime = ParseCs2Playtime(json) / 60; });
     }
-    
+
     private async Task FetchSteamLevelAsync(string steamId)
     {
-        var url = $"https://api.steampowered.com/ISteamUser/GetSteamLevel/v1/?key={_steamWebAPIKey}&steamid={steamId}";
-        _logger.LogInformation($"Fetching SteamLevel: {url}");
-        await FetchAndParseAsync(url, json =>
+        var url = $"https://api.steampowered.com/IPlayerService/GetSteamLevel/v1/?key={_steamWebAPIKey}&steamid={steamId}";
+        if (_config.Debug)
         {
-            UserInfo.SteamLevel = ParseSteamLevel(json);
-        });
+            _logger.LogInformation($"Fetching SteamLevel: {url}");
+        }
+
+        await FetchAndParseAsync(url, json => { UserInfo.SteamLevel = ParseSteamLevel(json); });
     }
-    
+
     private async Task FetchProfilePrivacyAsync(string steamId)
     {
         var url = $"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={_steamWebAPIKey}&steamids={steamId}";
-        _logger.LogInformation($"Fetching Profile Privacy: {url}");
+        if (_config.Debug)
+        {
+            _logger.LogInformation($"Fetching Profile Privacy: {url}");
+        }
+
         await FetchAndParseAsync(url, json => ParseSteamUserInfo(json, UserInfo));
     }
 
     private async Task FetchTradeBanStatusAsync(string steamId)
     {
         var url = $"https://api.steampowered.com/ISteamUser/GetPlayerBans/v1/?key={_steamWebAPIKey}&steamids={steamId}";
-        _logger.LogInformation($"Fetching Trade Ban Status: {url}");
+        if (_config.Debug)
+        {
+            _logger.LogInformation($"Fetching Trade Ban Status: {url}");
+        }
+
         await FetchAndParseAsync(url, json =>
         {
             ParseTradeBanStatus(json, UserInfo);
@@ -92,7 +108,11 @@ public class SteamService
     private async Task FetchGameBanStatusAsync(string steamId)
     {
         var url = $"https://api.steampowered.com/ISteamUser/GetUserGameBan/v1/?key={_steamWebAPIKey}&steamids={steamId}";
-        _logger.LogInformation($"Fetching Game Ban Status: {url}");
+        if (_config.Debug)
+        {
+            _logger.LogInformation($"Fetching Game Ban Status: {url}");
+        }
+
         await FetchAndParseAsync(url, json => ParseGameBanStatus(json, UserInfo));
     }
 

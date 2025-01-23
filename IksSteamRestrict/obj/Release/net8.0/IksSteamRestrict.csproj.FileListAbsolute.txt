@@ -1,0 +1,12 @@
+/Users/alexandrdanilyev/Documents/Work/CS/plugins/IksSteamRestrict/IksSteamRestrict/bin/Release/net8.0/IksSteamRestrict.deps.json
+/Users/alexandrdanilyev/Documents/Work/CS/plugins/IksSteamRestrict/IksSteamRestrict/bin/Release/net8.0/IksSteamRestrict.dll
+/Users/alexandrdanilyev/Documents/Work/CS/plugins/IksSteamRestrict/IksSteamRestrict/bin/Release/net8.0/IksAdminApi.dll
+/Users/alexandrdanilyev/Documents/Work/CS/plugins/IksSteamRestrict/IksSteamRestrict/obj/Release/net8.0/IksSteamRestrict.csproj.AssemblyReference.cache
+/Users/alexandrdanilyev/Documents/Work/CS/plugins/IksSteamRestrict/IksSteamRestrict/obj/Release/net8.0/IksSteamRestrict.GeneratedMSBuildEditorConfig.editorconfig
+/Users/alexandrdanilyev/Documents/Work/CS/plugins/IksSteamRestrict/IksSteamRestrict/obj/Release/net8.0/IksSteamRestrict.AssemblyInfoInputs.cache
+/Users/alexandrdanilyev/Documents/Work/CS/plugins/IksSteamRestrict/IksSteamRestrict/obj/Release/net8.0/IksSteamRestrict.AssemblyInfo.cs
+/Users/alexandrdanilyev/Documents/Work/CS/plugins/IksSteamRestrict/IksSteamRestrict/obj/Release/net8.0/IksSteamRestrict.csproj.CoreCompileInputs.cache
+/Users/alexandrdanilyev/Documents/Work/CS/plugins/IksSteamRestrict/IksSteamRestrict/obj/Release/net8.0/IksSteam.B5F8679D.Up2Date
+/Users/alexandrdanilyev/Documents/Work/CS/plugins/IksSteamRestrict/IksSteamRestrict/obj/Release/net8.0/IksSteamRestrict.dll
+/Users/alexandrdanilyev/Documents/Work/CS/plugins/IksSteamRestrict/IksSteamRestrict/obj/Release/net8.0/refint/IksSteamRestrict.dll
+/Users/alexandrdanilyev/Documents/Work/CS/plugins/IksSteamRestrict/IksSteamRestrict/obj/Release/net8.0/ref/IksSteamRestrict.dll

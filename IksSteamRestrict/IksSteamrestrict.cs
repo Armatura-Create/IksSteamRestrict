@@ -121,8 +121,13 @@ public class IksSteamRestrict : AdminModule
                 }
 
                 var result = IsRestrictionViolated(player, userInfo);
+                if (Config.Debug)
+                {
+                    Logger.LogInformation($"Player {player.PlayerName} violated restriction: {result}");
+                }
 
                 if (result == TypeViolated.APPROVED) return;
+                
                 if (Config.BanRestrict)
                 {
                     var playerSlot = player.Slot;
@@ -147,6 +152,13 @@ public class IksSteamRestrict : AdminModule
                                 GetReason(result),
                                 GetDuration(result, userInfo)
                             );
+                            playerBan.AdminId = Api.ConsoleAdmin.Id;
+                            playerBan.CreatedAt = AdminUtils.CurrentTimestamp();
+                            playerBan.UpdatedAt = AdminUtils.CurrentTimestamp();
+                            if (Config.Debug)
+                            {
+                                Logger.LogInformation($"Banning {player.PlayerName} for {GetReasonPrivate(result)}");
+                            }
                             Api.AddBan(playerBan, false);
 
                             _gHTimer[playerSlot]?.Kill();
@@ -161,6 +173,10 @@ public class IksSteamRestrict : AdminModule
                 }
                 else
                 {
+                    if (Config.Debug)
+                    {
+                        Logger.LogInformation($"Kicking {player.PlayerName} for {GetReasonPrivate(result)}");
+                    }
                     Api.Kick(Api.ConsoleAdmin, player, GetReasonPrivate(result));
                 }
             });
@@ -171,7 +187,7 @@ public class IksSteamRestrict : AdminModule
     {
         var steamId64 = player.AuthorizedSteamID?.SteamId64 ?? 0;
 
-        if (Api.GetAdminsBySteamId(steamId64.ToString(), false).Result.Count > 0)
+        if (Api.GetAdminsBySteamId(steamId64.ToString()).Result.Count > 0)
         {
             return TypeViolated.APPROVED;
         }
@@ -233,7 +249,7 @@ public class IksSteamRestrict : AdminModule
             TypeViolated.MIN_ACCOUNT_AGE => Config.MinimumSteamAccountAgeInDays,
             _ => 0
         };
-        return Localizer["Reason." + type, value];
+        return Localizer["Reason." + type, value.ToString() == "0" ? "" : value.ToString()];
     }
 
     private int GetDuration(TypeViolated type, SteamUserInfo userinfo)
