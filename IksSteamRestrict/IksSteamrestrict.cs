@@ -28,13 +28,14 @@ public class IksSteamRestrict : AdminModule
     public override void Load(bool hotReload)
     {
         if (!hotReload) return;
+
         _gBSteamApiActivated = true;
 
         foreach (var player in Utilities.GetPlayers().Where(p =>
-                     p is { Connected: PlayerConnectedState.PlayerConnected, IsHLTV: false, IsBot: false } && 
+                     p is { Connected: PlayerConnectedState.PlayerConnected, IsHLTV: false, IsBot: false } &&
                      p.SteamID.ToString().Length == 17))
         {
-            OnPlayerConnectFull(player);
+            ProcessPlayerConnection(player);
         }
     }
 
@@ -60,12 +61,13 @@ public class IksSteamRestrict : AdminModule
         var player = @event.Userid;
         if (player != null)
         {
-            OnPlayerConnectFull(player);
+            ProcessPlayerConnection(player);
         }
+
         return HookResult.Continue;
     }
 
-    private void OnPlayerConnectFull(CCSPlayerController player)
+    private void ProcessPlayerConnection(CCSPlayerController player)
     {
         if (string.IsNullOrEmpty(Config.SteamWebAPI) || player.IsBot || player.IsHLTV)
             return;
@@ -76,69 +78,88 @@ public class IksSteamRestrict : AdminModule
             {
                 if (player.AuthorizedSteamID == null) return;
                 _gHTimer[player.Slot]?.Kill();
-                OnPlayerConnectFull(player);
+                ProcessPlayerConnection(player);
             }, TimerFlags.REPEAT);
             return;
         }
 
         if (!_gBSteamApiActivated) return;
 
-        var authorizedSteamID = player.AuthorizedSteamID.SteamId64;
-        Server.NextWorldUpdate(() => CheckUserViolations(authorizedSteamID));
+        Server.NextWorldUpdate(() => StartCheckingUserViolations(player));
     }
 
-    private void CheckUserViolations(ulong authorizedSteamID)
+    private void StartCheckingUserViolations(CCSPlayerController? player)
     {
         var userInfo = new SteamUserInfo();
         var steamService = new SteamService(this, userInfo);
+        var authorizedSteamID = player?.AuthorizedSteamID?.SteamId64 ?? 0;
+        var playerName = player?.PlayerName ?? "Unknown";
+
+        if (authorizedSteamID == 0) return;
 
         Task.Run(async () =>
         {
-            await steamService.FetchSteamUserInfo(authorizedSteamID.ToString());
-            userInfo = steamService.UserInfo;
-
-            Server.NextWorldUpdate(() =>
+            try
             {
-                var player = Utilities.GetPlayerFromSteamId(authorizedSteamID);
+                await steamService.FetchSteamUserInfo(authorizedSteamID.ToString());
+                userInfo = steamService.UserInfo;
+
                 if (player?.IsValid != true) return;
 
                 if (Config.Debug)
                 {
-                    LogPlayerInfo(player, userInfo);
+                    LogPlayerInfo(playerName, userInfo);
                 }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"Error fetching user info for SteamID {authorizedSteamID}: {ex.Message}");
+            }
 
-                Task.Run(async () =>
-                {
-                    var result = await IsRestrictionViolatedAsync(player, userInfo);
-                    Server.NextWorldUpdate(() => HandleViolation(player, result, userInfo));
-                });
-            });
+            try
+            {
+                if (player?.IsValid != true) return;
+                ProcessViolationAsync(authorizedSteamID, playerName, userInfo);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"Error ProcessViolationAsync user info for SteamID {authorizedSteamID}: {ex.Message}");
+            }
         });
     }
 
-    private void LogPlayerInfo(CCSPlayerController player, SteamUserInfo userInfo)
+    private void ProcessViolationAsync(ulong steamId64, string playerName, SteamUserInfo userInfo)
     {
-        Logger.LogInformation($"{player.PlayerName} info:");
+        var result = IsRestrictionViolatedAsync(steamId64, playerName, userInfo);
+
+        Server.NextWorldUpdate(() =>
+        {
+            if (result == TypeViolated.APPROVED) return;
+
+            var playerFromSteamId = Utilities.GetPlayerFromSteamId(steamId64);
+
+            if (playerFromSteamId == null) return;
+
+            if (Config.BanRestrict)
+            {
+                BanPlayer(playerFromSteamId, result, userInfo);
+            }
+            else
+            {
+                Logger.LogInformation($"Kicking {playerName} for {GetReasonPrivate(result)}");
+                Api.Kick(Api.ConsoleAdmin, playerFromSteamId, GetReasonPrivate(result));
+            }
+        });
+    }
+
+    private void LogPlayerInfo(string playerName, SteamUserInfo userInfo)
+    {
+        Logger.LogInformation($"{playerName} info:");
         Logger.LogInformation($"CS2Playtime: {userInfo.CS2Playtime}");
         Logger.LogInformation($"SteamLevel: {userInfo.SteamLevel}");
         Logger.LogInformation($"Account Creation Date: {userInfo.SteamAccountAge:dd-MM-yyyy} ({(int)(Now - userInfo.SteamAccountAge).TotalDays} days ago)");
         Logger.LogInformation($"HasPrivateProfile: {userInfo.IsPrivate}");
         Logger.LogInformation($"IsGameBanned: {userInfo.IsGameBanned}");
-    }
-
-    private void HandleViolation(CCSPlayerController player, TypeViolated result, SteamUserInfo userInfo)
-    {
-        if (result == TypeViolated.APPROVED) return;
-
-        if (Config.BanRestrict)
-        {
-            BanPlayer(player, result, userInfo);
-        }
-        else
-        {
-            Logger.LogInformation($"Kicking {player.PlayerName} for {GetReasonPrivate(result)}");
-            Api.Kick(Api.ConsoleAdmin, player, GetReasonPrivate(result));
-        }
     }
 
     private void BanPlayer(CCSPlayerController player, TypeViolated result, SteamUserInfo userInfo)
@@ -157,7 +178,8 @@ public class IksSteamRestrict : AdminModule
                 }
                 else
                 {
-                    var playerBan = new PlayerBan(player.SteamID.ToString(), player.IpAddress, player.PlayerName, GetReason(result), GetDuration(result, userInfo))
+                    var playerBan = new PlayerBan(player.SteamID.ToString(), player.IpAddress, player.PlayerName, GetReason(result),
+                        GetDuration(result, userInfo))
                     {
                         AdminId = Api.ConsoleAdmin.Id,
                         CreatedAt = AdminUtils.CurrentTimestamp(),
@@ -179,26 +201,45 @@ public class IksSteamRestrict : AdminModule
         }, TimerFlags.REPEAT);
     }
 
-    private async Task<TypeViolated> IsRestrictionViolatedAsync(CCSPlayerController player, SteamUserInfo userInfo)
+    private TypeViolated IsRestrictionViolatedAsync(ulong steamId64, string playerName, SteamUserInfo userInfo)
     {
-        var steamId64 = player.AuthorizedSteamID?.SteamId64 ?? 0;
+        if (Config.Debug)
+        {
+            Logger.LogInformation($"Checking {playerName} if admin");
+        }
 
-        if ((await Api.GetAdminsBySteamId(steamId64.ToString())).Count > 0) return TypeViolated.APPROVED;
+        if ((Api.GetAdminsBySteamId(steamId64.ToString())).Result.Count > 0) return TypeViolated.APPROVED;
 
-        if (await _dbService.IsPlayerApprovedAsync(steamId64)) return TypeViolated.APPROVED;
+        if (Config.Debug)
+        {
+            Logger.LogInformation($"Checking {playerName} if already approved");
+        }
+
+        if (_dbService.IsPlayerApprovedAsync(steamId64).Result) return TypeViolated.APPROVED;
+
+        if (Config.Debug)
+        {
+            Logger.LogInformation($"Checking {playerName} if bypassed");
+        }
 
         var bypassConfig = _bypassConfig ?? new PlayerBypassConfig.BypassConfig();
         if (bypassConfig.GetPlayerBypass(steamId64)) return TypeViolated.APPROVED;
 
         if (Config.MinimumHour != -1 && userInfo.CS2Playtime < Config.MinimumHour) return TypeViolated.MIN_HOURS;
         if (Config.MinimumLevel != -1 && userInfo.SteamLevel < Config.MinimumLevel) return TypeViolated.STEAM_LEVEL;
-        if (Config.MinimumSteamAccountAgeInDays != -1 && (Now - userInfo.SteamAccountAge).TotalDays < Config.MinimumSteamAccountAgeInDays) return TypeViolated.MIN_ACCOUNT_AGE;
+        if (Config.MinimumSteamAccountAgeInDays != -1 && (Now - userInfo.SteamAccountAge).TotalDays < Config.MinimumSteamAccountAgeInDays)
+            return TypeViolated.MIN_ACCOUNT_AGE;
         if (Config.BlockPrivateProfile && (userInfo.IsPrivate || userInfo.IsGameDetailsPrivate)) return TypeViolated.PRIVATE_PROFILE;
         if (Config.BlockTradeBanned && userInfo.IsTradeBanned) return TypeViolated.TRADE_BANNED;
         if (Config.BlockGameBanned && userInfo.IsGameBanned) return TypeViolated.GAME_BANNED;
         if (Config.BlockVACBanned && userInfo.IsVACBanned) return TypeViolated.VAC_BANNED;
 
-        await _dbService.AddPlayerApprovedAsync(steamId64, player.PlayerName);
+        if (Config.Debug)
+        {
+            Logger.LogInformation($"Approving {playerName} and save to database");
+        }
+
+        _dbService.AddPlayerApprovedAsync(steamId64, playerName).Wait();
         return TypeViolated.APPROVED;
     }
 
