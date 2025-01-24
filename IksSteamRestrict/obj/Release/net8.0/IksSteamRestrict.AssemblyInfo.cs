@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("IksSteamRestrict")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+4cea59303ff9a6aa86975fa4504ff6720a3b10e4")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9f177b4ae168c2003a286819cae7ef5ee20d4339")]
 [assembly: System.Reflection.AssemblyProductAttribute("IksSteamRestrict")]
 [assembly: System.Reflection.AssemblyTitleAttribute("IksSteamRestrict")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

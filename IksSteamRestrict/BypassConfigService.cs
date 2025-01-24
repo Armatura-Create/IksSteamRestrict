@@ -3,93 +3,87 @@ using System.Text.Json;
 namespace IksSteamRestrict;
 
 public class PlayerBypassConfig
-	{
-		public bool BypassMinimumHours { get; set; } = false;
-		public bool BypassMinimumLevel { get; set; } = false;
-		public bool BypassMinimumSteamAccountAge { get; set; } = false;
-		public bool BypassPrivateProfile { get; set; } = false;
-		public bool BypassTradeBanned { get; set; } = false;
-		public bool BypassVACBanned { get; set; } = false;
-		public bool BypassGameBanned { get; set; } = false;
-	}
+{
+    public class BypassConfig
+    {
+        private readonly List<ulong> _playersBypassed = new();
 
-	public class BypassConfig
-	{
-		private Dictionary<ulong, PlayerBypassConfig> _playerConfigs = new Dictionary<ulong, PlayerBypassConfig>();
+        // Проверка, обходится ли игрок
+        public bool GetPlayerBypass(ulong steamID)
+        {
+            return _playersBypassed.Contains(steamID);
+        }
 
-		public PlayerBypassConfig? GetPlayerConfig(ulong steamID)
-		{
-			if (_playerConfigs.TryGetValue(steamID, out var playerConfig))
-				return playerConfig;
+        // Добавление игрока в обход
+        public void AddPlayerConfig(ulong steamID)
+        {
+            if (!_playersBypassed.Contains(steamID))
+            {
+                _playersBypassed.Add(steamID);
+            }
+        }
 
-			return null;
-		}
+        // Получение всех игроков, которых нужно обойти
+        public List<ulong> GetAllBypassedPlayers()
+        {
+            return _playersBypassed;
+        }
+    }
 
-		public void AddPlayerConfig(ulong steamID, PlayerBypassConfig playerConfig)
-		{
-			_playerConfigs[steamID] = playerConfig;
-		}
+    public class BypassConfigService
+    {
+        private readonly string _configFilePath;
 
-		public Dictionary<ulong, PlayerBypassConfig> GetAllPlayerConfigs()
-		{
-			return _playerConfigs;
-		}
-	}
+        public BypassConfigService(string configFilePath)
+        {
+            _configFilePath = configFilePath;
 
-	public class BypassConfigService
-	{
-		private readonly string _configFilePath;
+            // Создание файла, если его нет
+            if (!File.Exists(_configFilePath))
+            {
+                File.WriteAllText(_configFilePath, "[]");
+            }
+        }
 
-		public BypassConfigService(string configFilePath)
-		{
-			_configFilePath = configFilePath;
-		}
+        // Загрузка конфигурации из файла
+        public BypassConfig LoadConfig()
+        {
+            var bypassConfig = new BypassConfig();
 
-		public BypassConfig LoadConfig()
-		{
-			if (File.Exists(_configFilePath))
-			{
-				string json = File.ReadAllText(_configFilePath);
-				var playerConfigs = JsonSerializer.Deserialize<Dictionary<ulong, PlayerBypassConfig>>(json)!;
-				var bypassConfig = new BypassConfig();
+            try
+            {
+                var json = File.ReadAllText(_configFilePath);
+                var playerConfigs = JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
 
-				foreach (var kvp in playerConfigs)
-				{
-					bypassConfig.AddPlayerConfig(kvp.Key, kvp.Value);
-				}
+                foreach (var id in playerConfigs)
+                {
+                    if (ulong.TryParse(id, out var steamID))
+                    {
+                        bypassConfig.AddPlayerConfig(steamID);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading bypass config: {ex.Message}");
+            }
 
-				return bypassConfig;
-			}
-			else
-			{
-				var defaultConfig = new BypassConfig();
+            return bypassConfig;
+        }
 
-				defaultConfig.AddPlayerConfig(76561198345583467, new PlayerBypassConfig
-				{
-					BypassMinimumHours = false,
-					BypassMinimumLevel = true,
-					BypassMinimumSteamAccountAge = false,
-					BypassPrivateProfile = true,
-					BypassTradeBanned = false,
-					BypassVACBanned = true,
-					BypassGameBanned = true
-				});
-
-				defaultConfig.AddPlayerConfig(76561198132924835, new PlayerBypassConfig
-				{
-					BypassMinimumHours = true,
-					BypassMinimumLevel = false,
-					BypassMinimumSteamAccountAge = true,
-					BypassPrivateProfile = false,
-					BypassTradeBanned = true,
-					BypassVACBanned = false,
-					BypassGameBanned = false
-				});
-
-				string json = JsonSerializer.Serialize(defaultConfig.GetAllPlayerConfigs(), new JsonSerializerOptions { WriteIndented = true });
-				File.WriteAllText(_configFilePath, json);
-
-				return defaultConfig;
-			}
-		}
-	}
+        // Сохранение конфигурации в файл
+        public void SaveConfig(BypassConfig bypassConfig)
+        {
+            try
+            {
+                var players = bypassConfig.GetAllBypassedPlayers();
+                var json = JsonSerializer.Serialize(players.Select(id => id.ToString()).ToList());
+                File.WriteAllText(_configFilePath, json);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error saving bypass config: {ex.Message}");
+            }
+        }
+    }
+}
