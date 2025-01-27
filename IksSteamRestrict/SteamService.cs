@@ -65,7 +65,11 @@ public class SteamService
             _logger.LogInformation($"Fetching CS2Playtime: {url}");
         }
 
-        await FetchAndParseAsync(url, json => { UserInfo.CS2Playtime = ParseCs2Playtime(json) / 60; });
+        await FetchAndParseAsync(url, json =>
+        {
+            var cs2Playtime = ParseCs2Playtime(json);
+            UserInfo.CS2Playtime = cs2Playtime == -1 ? -1 : cs2Playtime / 60;
+        });
     }
 
     private async Task FetchSteamLevelAsync(string steamId)

@@ -76,7 +76,7 @@ public class IksSteamRestrict : AdminModule
         {
             _gHTimer[player.Slot] = AddTimer(1.0f, () =>
             {
-                if (player.AuthorizedSteamID == null) return;
+                if (player.AuthorizedSteamID == null || !player.IsValid) return;
                 _gHTimer[player.Slot]?.Kill();
                 ProcessPlayerConnection(player);
             }, TimerFlags.REPEAT);
@@ -88,7 +88,7 @@ public class IksSteamRestrict : AdminModule
         Server.NextWorldUpdate(() => StartCheckingUserViolations(player));
     }
 
-    private void StartCheckingUserViolations(CCSPlayerController? player)
+    private void StartCheckingUserViolations(CCSPlayerController player)
     {
         var userInfo = new SteamUserInfo();
         var steamService = new SteamService(this, userInfo);
@@ -103,9 +103,7 @@ public class IksSteamRestrict : AdminModule
             {
                 await steamService.FetchSteamUserInfo(authorizedSteamID.ToString());
                 userInfo = steamService.UserInfo;
-
-                if (player?.IsValid != true) return;
-
+                
                 if (Config.Debug)
                 {
                     LogPlayerInfo(playerName, userInfo);
@@ -118,7 +116,6 @@ public class IksSteamRestrict : AdminModule
 
             try
             {
-                if (player?.IsValid != true) return;
                 ProcessViolationAsync(authorizedSteamID, playerName, userInfo);
             }
             catch (Exception ex)
@@ -225,8 +222,8 @@ public class IksSteamRestrict : AdminModule
         var bypassConfig = _bypassConfig ?? new PlayerBypassConfig.BypassConfig();
         if (bypassConfig.GetPlayerBypass(steamId64)) return TypeViolated.APPROVED;
 
-        if (Config.MinimumHour != -1 && userInfo.CS2Playtime < Config.MinimumHour) return TypeViolated.MIN_HOURS;
-        if (Config.MinimumLevel != -1 && userInfo.SteamLevel < Config.MinimumLevel) return TypeViolated.STEAM_LEVEL;
+        if (Config.MinimumHour != -1 && userInfo.CS2Playtime > -1 && userInfo.CS2Playtime < Config.MinimumHour) return TypeViolated.MIN_HOURS;
+        if (Config.MinimumLevel != -1 && userInfo.SteamLevel > -1 && userInfo.SteamLevel < Config.MinimumLevel) return TypeViolated.STEAM_LEVEL;
         if (Config.MinimumSteamAccountAgeInDays != -1 && (Now - userInfo.SteamAccountAge).TotalDays < Config.MinimumSteamAccountAgeInDays)
             return TypeViolated.MIN_ACCOUNT_AGE;
         if (Config.BlockPrivateProfile && (userInfo.IsPrivate || userInfo.IsGameDetailsPrivate)) return TypeViolated.PRIVATE_PROFILE;
